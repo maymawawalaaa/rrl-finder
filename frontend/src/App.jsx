@@ -2,424 +2,281 @@
 import { useState } from "react";
 import "./App.css";
 
+const API_URL = "http://127.0.0.1:8000/api/search";
+
 function App() {
-  // Form states
   const [title, setTitle] = useState("");
   const [website, setWebsite] = useState("");
   const [startYear, setStartYear] = useState("2020");
   const [endYear, setEndYear] = useState("2026");
 
-  // Search states
   const [results, setResults] = useState([]);
+  const [errors, setErrors] = useState([]);
   const [searched, setSearched] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  // Search literature through FastAPI
-  async function handleSearch(event) {
+  const handleSearch = async (event) => {
     event.preventDefault();
 
-    // Reset previous search
     setError("");
+    setErrors([]);
     setResults([]);
     setSearched(false);
 
-    // Convert years into numbers
-    const from = Number(startYear);
-    const to = Number(endYear);
-
-    // Validate research title
     if (!title.trim()) {
-      setError("Please enter your research title.");
+      setError("Please enter your thesis or research title.");
       return;
     }
 
-    // Validate year range
-    if (!startYear || !endYear || from < 1900 || to > 2100) {
+    if (!website.trim()) {
+      setError("Please enter a website URL.");
+      return;
+    }
+
+    if (
+      Number(startYear) > Number(endYear) ||
+      !startYear ||
+      !endYear
+    ) {
       setError("Please enter a valid publication year range.");
       return;
     }
 
-    if (from > to) {
-      setError(
-        "Starting year cannot be greater than ending year."
-      );
-      return;
-    }
-
-    // Validate website URL
     try {
-      const parsedUrl = new URL(website);
-
-      if (!["http:", "https:"].includes(parsedUrl.protocol)) {
-        setError(
-          "Please enter a valid HTTP or HTTPS website URL."
-        );
-        return;
+      new URL(website);
+      if (!["http:", "https:"].includes(new URL(website).protocol)) {
+        throw new Error("Invalid protocol");
       }
     } catch {
-      setError("Please enter a valid website URL.");
+      setError("Please enter a valid website URL starting with https:// or http://.");
       return;
     }
 
-    // Start loading
     setLoading(true);
 
     try {
-      // Send search request to FastAPI
-      const response = await fetch(
-        "http://127.0.0.1:8000/api/search",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            title: title.trim(),
-            start_year: from,
-            end_year: to,
-            rows: 20,
-          }),
-        }
-      );
+      const response = await fetch(API_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          title: title.trim(),
+          start_year: Number(startYear),
+          end_year: Number(endYear),
+          website_url: website.trim(),
+          rows: 20,
+        }),
+      });
 
-      // Read backend response
       const data = await response.json();
 
-      // Handle backend errors
       if (!response.ok) {
         throw new Error(
-          typeof data.detail === "string"
-            ? data.detail
-            : "Unable to retrieve research results."
+          data.detail || "Unable to complete your search."
         );
       }
 
-      // Store research results
-      setResults(
-        Array.isArray(data.results) ? data.results : []
-      );
-
+      setResults(data.results || []);
+      setErrors(data.errors || []);
       setSearched(true);
 
+      if (!data.results?.length) {
+        setError("No results were found. Try another title or website.");
+      }
     } catch (err) {
-      console.error("Search error:", err);
-
       setError(
-        err.message ||
-        "Unable to connect to the backend. Please check if FastAPI is running."
+        err.message || "Unable to connect to the RRL Finder backend."
       );
-
     } finally {
       setLoading(false);
     }
-  }
+  };
 
-  // Clear form
-  function handleClear() {
+  const handleClear = () => {
     setTitle("");
     setWebsite("");
     setStartYear("2020");
     setEndYear("2026");
     setResults([]);
-    setSearched(false);
+    setErrors([]);
     setError("");
-    setLoading(false);
-  }
+    setSearched(false);
+  };
+
+  const cleanText = (text) => {
+    if (!text) return "No abstract or description available.";
+
+    return text
+      .replace(/<[^>]*>/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  };
 
   return (
-    <div className="app">
-
-      {/* Navigation */}
-      <header className="navbar">
-        <a href="/" className="brand">
-          <div className="brand-icon">R</div>
-          <span>RRL Finder</span>
-        </a>
-
-        <span className="navbar-label">
-          Research Literature Assistant
-        </span>
+    <div className="app-container">
+      <header className="header">
+        <h1>RRL Finder</h1>
+        <p>
+          Find related literature and studies for your research.
+        </p>
       </header>
 
-      <main className="main-container">
-
-        {/* Hero Section */}
-        <section className="hero">
-          <div className="hero-badge">
-            <span className="status-dot"></span>
-            Academic Research Assistant
-          </div>
-
-          <h1>
-            Find the right literature
-            <br />
-            for your <span>research.</span>
-          </h1>
-
+      <main className="main-content">
+        <section className="search-section">
+          <h2>Research Search</h2>
           <p>
-            Discover related literature and studies using your
-            research title, preferred website, and publication
-            year range.
+            Enter your research details to discover related sources.
           </p>
-        </section>
-
-        {/* Search Form */}
-        <section className="search-card">
-
-          <div className="card-heading">
-            <div>
-              <h2>Research Search</h2>
-              <p>Enter your research information below.</p>
-            </div>
-
-            <div className="search-icon">⌕</div>
-          </div>
 
           <form onSubmit={handleSearch}>
-
-            {/* Research Title */}
             <div className="form-group">
-              <label htmlFor="title">
-                Thesis / Research Title
-              </label>
-
+              <label>Thesis / Research Title</label>
               <input
-                id="title"
                 type="text"
-                placeholder="Enter your thesis or research title"
+                placeholder="Enter your research title"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                required
-                minLength={3}
-                maxLength={500}
               />
-
-              <small>
-                Enter the complete title or topic of your research.
-              </small>
             </div>
 
-            {/* Website URL */}
             <div className="form-group">
-              <label htmlFor="website">
-                Website URL
-              </label>
-
+              <label>Website URL</label>
               <input
-                id="website"
                 type="url"
                 placeholder="https://example.com"
                 value={website}
                 onChange={(e) => setWebsite(e.target.value)}
-                required
               />
-
-              <small>
-                Enter the website where you want to find related
-                research.
-              </small>
             </div>
 
-            {/* Publication Year Range */}
-            <div className="form-group">
-              <label>
-                Publication Year Range
-              </label>
+            <div className="year-inputs">
+              <div className="form-group">
+                <label>From Year</label>
+                <input
+                  type="number"
+                  min="1900"
+                  max="2100"
+                  value={startYear}
+                  onChange={(e) => setStartYear(e.target.value)}
+                />
+              </div>
 
-              <div className="year-inputs">
-
-                <div>
-                  <span>From</span>
-
-                  <input
-                    type="number"
-                    value={startYear}
-                    onChange={(e) =>
-                      setStartYear(e.target.value)
-                    }
-                    min="1900"
-                    max="2100"
-                    required
-                  />
-                </div>
-
-                <div className="year-separator">
-                  —
-                </div>
-
-                <div>
-                  <span>To</span>
-
-                  <input
-                    type="number"
-                    value={endYear}
-                    onChange={(e) =>
-                      setEndYear(e.target.value)
-                    }
-                    min="1900"
-                    max="2100"
-                    required
-                  />
-                </div>
-
+              <div className="form-group">
+                <label>To Year</label>
+                <input
+                  type="number"
+                  min="1900"
+                  max="2100"
+                  value={endYear}
+                  onChange={(e) => setEndYear(e.target.value)}
+                />
               </div>
             </div>
 
-            {/* Error Message */}
             {error && (
               <div className="error-message">
                 {error}
               </div>
             )}
 
-            {/* Form Buttons */}
-            <div className="form-actions">
+            <div className="button-group">
+              <button type="submit" disabled={loading}>
+                {loading ? "Searching..." : "Search"}
+              </button>
 
               <button
                 type="button"
                 className="clear-button"
                 onClick={handleClear}
-                disabled={loading}
               >
                 Clear
               </button>
-
-              <button
-                type="submit"
-                className="search-button"
-                disabled={loading}
-              >
-                {loading
-                  ? "Searching..."
-                  : "⌕ Find Related Literature"}
-              </button>
-
             </div>
-
           </form>
         </section>
 
-        {/* Search Results */}
-        {searched && (
-
-          <section className="results-section">
-
-            <div className="results-heading">
-
-              <div>
-                <h2>Search Results</h2>
-
-                <p>
-                  Research publications within your selected
-                  year range.
-                </p>
-              </div>
-
-              <span className="result-count">
-                {results.length} results
-              </span>
-
-            </div>
-
-            {/* Display Results */}
-            {results.length > 0 ? (
-
-              <div className="results-list">
-
-                {results.map((item, index) => (
-
-                  <article
-                    className="result-card"
-                    key={item.doi || item.id || index}
-                  >
-
-                    {/* Publication Information */}
-                    <div className="result-top">
-
-                      <span className="result-year">
-                        {item.year || "Year unavailable"}
-                      </span>
-
-                      <span className="result-source">
-                        {item.journal || "Unknown Journal"}
-                      </span>
-
-                    </div>
-
-                    {/* Research Title */}
-                    <h3>
-                      {item.title || "Untitled Research"}
-                    </h3>
-
-                    {/* Authors */}
-                    <p className="authors">
-                      {Array.isArray(item.authors)
-                        ? item.authors.join(", ")
-                        : item.authors || "Authors not available"}
-                    </p>
-
-                    {/* Abstract */}
-                    <p className="abstract">
-                      {item.abstract ||
-                        "No abstract available for this publication."}
-                    </p>
-
-                    {/* DOI */}
-                    {item.doi && (
-                      <p className="authors">
-                        DOI: {item.doi}
-                      </p>
-                    )}
-
-                    {/* Original Research Link */}
-                    {item.url && (
-
-                      <a
-                        href={item.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="source-link"
-                      >
-                        View Original Source ↗
-                      </a>
-
-                    )}
-
-                  </article>
-
-                ))}
-
-              </div>
-
-            ) : (
-
-              /* No Results */
-              <div className="empty-results">
-
-                <h3>No results found</h3>
-
-                <p>
-                  Try changing your research title or publication
-                  year range.
-                </p>
-
-              </div>
-
-            )}
-
-          </section>
-
+        {loading && (
+          <div className="loading-message">
+            Searching Crossref and website...
+          </div>
         )}
 
-        {/* Footer */}
-        <footer className="footer">
-          <p>
-            RRL Finder © 2026 | Academic Research Assistance Tool
-          </p>
-        </footer>
+        {errors.length > 0 && (
+          <section className="search-warnings">
+            <h3>Search warnings</h3>
+            {errors.map((item, index) => (
+              <p key={index}>{item}</p>
+            ))}
+          </section>
+        )}
 
+        {searched && (
+          <section className="results-section">
+            <h2>Search Results</h2>
+
+            <p className="results-count">
+              {results.length} result(s) found
+            </p>
+
+            {results.length === 0 ? (
+              <p>No results found.</p>
+            ) : (
+              results.map((item, index) => (
+                <article className="result-card" key={index}>
+                <div className="result-meta">
+                  <span className="source-badge">
+                    {item.source || "Unknown source"}
+                  </span>
+
+                  {item.year && (
+                    <span>{item.year}</span>
+                  )}
+
+                  <span className="relevance-badge">
+                    {item.relevance_score ?? 0}% relevant
+                  </span>
+                </div>
+                  <h3>{item.title || "Untitled source"}</h3>
+
+                  {item.authors?.length > 0 && (
+                    <p>
+                      <strong>Authors:</strong>{" "}
+                      {item.authors.join(", ")}
+                    </p>
+                  )}
+
+                  {item.journal && (
+                    <p>
+                      <strong>Publication:</strong>{" "}
+                      {item.journal}
+                    </p>
+                  )}
+
+                  <p className="abstract">
+                    {cleanText(item.abstract)}
+                  </p>
+
+                  {item.url && (
+                    <a
+                      href={item.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      View Source
+                    </a>
+                  )}
+                </article>
+              ))
+            )}
+          </section>
+        )}
       </main>
+
+      <footer className="footer">
+        <p>RRL Finder | Research Assistant</p>
+      </footer>
     </div>
   );
 }

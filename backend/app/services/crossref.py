@@ -106,7 +106,8 @@ def search_crossref(title, start_year, end_year, rows=20):
             "journal": journal,
             "doi": doi,
             "url": url,
-            "type": item.get("type", "unknown")
+            "type": item.get("type", "unknown"),
+            "source": "Crossref"
         })
 
     return results
