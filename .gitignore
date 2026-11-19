@@ -40,3 +40,19 @@ Thumbs.db
 # Temporary files
 *.log
 tempCodeRunnerFile.py
+
+# Python
+__pycache__/
+*.py[cod]
+venv/
+.env
+
+# React
+node_modules/
+dist/
+
+# Database
+*.db
+
+# VS Code
+.vscode/

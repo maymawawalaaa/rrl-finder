@@ -1,45 +1,68 @@
+
 import requests
+
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, HttpUrl, Field
+from pydantic import BaseModel, Field
+
 from app.services.crossref import search_crossref
-from app.services.scraper import scrape_website
+
 
 router = APIRouter()
 
+
 class SearchRequest(BaseModel):
     title: str = Field(min_length=3, max_length=500)
-    website_url: HttpUrl
+
     start_year: int = Field(ge=1900, le=2100)
+
     end_year: int = Field(ge=1900, le=2100)
+
+    rows: int = Field(default=20, ge=1, le=100)
+
 
 @router.post("/search")
 def search_rrl(data: SearchRequest):
 
+    # Validate publication year range
     if data.start_year > data.end_year:
         raise HTTPException(
             status_code=400,
-            detail="Starting year cannot exceed ending year"
+            detail="Starting year cannot exceed ending year."
         )
 
     try:
-        website_text = scrape_website(str(data.website_url))
-
         results = search_crossref(
-            data.title,
-            data.start_year,
-            data.end_year
+            title=data.title,
+            start_year=data.start_year,
+            end_year=data.end_year,
+            rows=data.rows
         )
 
         return {
+            "status": "success",
             "query": data.title,
-            "website": str(data.website_url),
-            "website_text_length": len(website_text),
+            "year_range": {
+                "start": data.start_year,
+                "end": data.end_year
+            },
             "total_results": len(results),
             "results": results
         }
 
+    except requests.Timeout:
+        raise HTTPException(
+            status_code=504,
+            detail="Crossref request timed out. Please try again."
+        )
+
     except requests.RequestException:
         raise HTTPException(
             status_code=502,
-            detail="Unable to retrieve information from an external source"
+            detail="Unable to connect to Crossref."
+        )
+
+    except ValueError:
+        raise HTTPException(
+            status_code=502,
+            detail="Invalid response received from Crossref."
         )

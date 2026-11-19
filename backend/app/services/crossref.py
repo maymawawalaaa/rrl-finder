@@ -1,7 +1,15 @@
+
 import requests
 
-def search_crossref(title, start_year, end_year):
-    url = "https://api.crossref.org/works"
+
+CROSSREF_API_URL = "https://api.crossref.org/works"
+
+
+def search_crossref(title, start_year, end_year, rows=20):
+    """
+    Search Crossref for scholarly publications
+    matching a research title and publication year range.
+    """
 
     params = {
         "query.title": title,
@@ -9,41 +17,96 @@ def search_crossref(title, start_year, end_year):
             f"from-pub-date:{start_year},"
             f"until-pub-date:{end_year}"
         ),
-        "rows": 20,
-        "select": "title,author,published,abstract,URL,DOI"
+        "rows": rows,
+        "select": (
+            "title,author,published,published-print,"
+            "published-online,issued,abstract,URL,DOI,"
+            "container-title,type"
+        ),
+    }
+
+    headers = {
+        "User-Agent": "RRLFinder/1.0 (mailto:richardculata319@gmail.com)"
     }
 
     response = requests.get(
-        url,
+        CROSSREF_API_URL,
         params=params,
-        headers={
-            "User-Agent": "RRLFinder/1.0 (mailto:your-email@example.com)"
-        },
+        headers=headers,
         timeout=30
     )
 
     response.raise_for_status()
 
-    items = response.json()["message"]["items"]
+    data = response.json()
+    items = data.get("message", {}).get("items", [])
 
     results = []
 
     for item in items:
-        authors = [
-            author.get("family", "")
-            for author in item.get("author", [])
-        ]
+
+        # Extract publication title
+        titles = item.get("title", [])
+        publication_title = (
+            titles[0] if titles else "Title unavailable"
+        )
+
+        # Extract authors
+        authors = []
+
+        for author in item.get("author", []):
+            given = author.get("given", "")
+            family = author.get("family", "")
+
+            full_name = f"{given} {family}".strip()
+
+            if full_name:
+                authors.append(full_name)
+
+        # Find publication year
+        year = None
+
+        for date_field in (
+            "published",
+            "published-print",
+            "published-online",
+            "issued"
+        ):
+            date_parts = (
+                item.get(date_field, {})
+                .get("date-parts", [])
+            )
+
+            if date_parts and date_parts[0]:
+                year = date_parts[0][0]
+                break
+
+        # Extract DOI and source link
+        doi = item.get("DOI", "")
+
+        url = item.get("URL", "")
+
+        if doi:
+            url = f"https://doi.org/{doi}"
+
+        # Extract journal or publication name
+        container_titles = item.get("container-title", [])
+
+        journal = (
+            container_titles[0]
+            if container_titles
+            else "Publication name unavailable"
+        )
 
         results.append({
-            "title": item.get("title", ["No title"])[0],
+            "title": publication_title,
             "authors": authors,
-            "year": (
-                item.get("published", {})
-                .get("date-parts", [[None]])[0][0]
-            ),
+            "year": year,
             "abstract": item.get("abstract", ""),
-            "url": item.get("URL", ""),
-            "doi": item.get("DOI", "")
+            "journal": journal,
+            "doi": doi,
+            "url": url,
+            "type": item.get("type", "unknown")
         })
 
     return results

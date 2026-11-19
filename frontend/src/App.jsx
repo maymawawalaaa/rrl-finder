@@ -2,70 +2,59 @@
 import { useState } from "react";
 import "./App.css";
 
-const sampleResults = [
-  {
-    id: 1,
-    title: "The Impact of Social Media on Students' Academic Performance",
-    authors: "Maria Santos, John Dela Cruz",
-    year: 2024,
-    abstract:
-      "This study examines the relationship between social media usage and academic performance among college students. Findings suggest that social media can influence study habits, learning engagement, and academic outcomes.",
-    source: "Example Academic Journal",
-    url: "https://example.com/research-1",
-  },
-  {
-    id: 2,
-    title: "Social Media Usage and Learning Behavior Among University Students",
-    authors: "Robert Smith, Angela Brown",
-    year: 2023,
-    abstract:
-      "This research investigates how social networking platforms affect the learning behavior, concentration, and educational experiences of university students.",
-    source: "Example Research Database",
-    url: "https://example.com/research-2",
-  },
-  {
-    id: 3,
-    title: "Digital Technology and Academic Achievement in Higher Education",
-    authors: "James Wilson, Patricia Garcia",
-    year: 2022,
-    abstract:
-      "The study explores the role of digital technologies in higher education and their relationship with student engagement, academic achievement, and learning outcomes.",
-    source: "Example University Repository",
-    url: "https://example.com/research-3",
-  },
-];
-
 function App() {
+  // Form states
   const [title, setTitle] = useState("");
   const [website, setWebsite] = useState("");
   const [startYear, setStartYear] = useState("2020");
   const [endYear, setEndYear] = useState("2026");
 
+  // Search states
   const [results, setResults] = useState([]);
   const [searched, setSearched] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  function handleSearch(event) {
+  // Search literature through FastAPI
+  async function handleSearch(event) {
     event.preventDefault();
 
+    // Reset previous search
     setError("");
     setResults([]);
     setSearched(false);
 
+    // Convert years into numbers
     const from = Number(startYear);
     const to = Number(endYear);
 
-    if (from > to) {
-      setError("Starting year cannot be greater than ending year.");
+    // Validate research title
+    if (!title.trim()) {
+      setError("Please enter your research title.");
       return;
     }
 
+    // Validate year range
+    if (!startYear || !endYear || from < 1900 || to > 2100) {
+      setError("Please enter a valid publication year range.");
+      return;
+    }
+
+    if (from > to) {
+      setError(
+        "Starting year cannot be greater than ending year."
+      );
+      return;
+    }
+
+    // Validate website URL
     try {
       const parsedUrl = new URL(website);
 
       if (!["http:", "https:"].includes(parsedUrl.protocol)) {
-        setError("Please enter a valid HTTP or HTTPS website URL.");
+        setError(
+          "Please enter a valid HTTP or HTTPS website URL."
+        );
         return;
       }
     } catch {
@@ -73,21 +62,60 @@ function App() {
       return;
     }
 
+    // Start loading
     setLoading(true);
 
-    // Temporary sample search.
-    // The real backend will replace this in Stage 2.
-    setTimeout(() => {
-      const filteredResults = sampleResults.filter(
-        (item) => item.year >= from && item.year <= to
+    try {
+      // Send search request to FastAPI
+      const response = await fetch(
+        "http://127.0.0.1:8000/api/search",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            title: title.trim(),
+            start_year: from,
+            end_year: to,
+            rows: 20,
+          }),
+        }
       );
 
-      setResults(filteredResults);
+      // Read backend response
+      const data = await response.json();
+
+      // Handle backend errors
+      if (!response.ok) {
+        throw new Error(
+          typeof data.detail === "string"
+            ? data.detail
+            : "Unable to retrieve research results."
+        );
+      }
+
+      // Store research results
+      setResults(
+        Array.isArray(data.results) ? data.results : []
+      );
+
       setSearched(true);
+
+    } catch (err) {
+      console.error("Search error:", err);
+
+      setError(
+        err.message ||
+        "Unable to connect to the backend. Please check if FastAPI is running."
+      );
+
+    } finally {
       setLoading(false);
-    }, 1000);
+    }
   }
 
+  // Clear form
   function handleClear() {
     setTitle("");
     setWebsite("");
@@ -96,10 +124,13 @@ function App() {
     setResults([]);
     setSearched(false);
     setError("");
+    setLoading(false);
   }
 
   return (
     <div className="app">
+
+      {/* Navigation */}
       <header className="navbar">
         <a href="/" className="brand">
           <div className="brand-icon">R</div>
@@ -112,6 +143,8 @@ function App() {
       </header>
 
       <main className="main-container">
+
+        {/* Hero Section */}
         <section className="hero">
           <div className="hero-badge">
             <span className="status-dot"></span>
@@ -131,16 +164,21 @@ function App() {
           </p>
         </section>
 
+        {/* Search Form */}
         <section className="search-card">
+
           <div className="card-heading">
             <div>
               <h2>Research Search</h2>
               <p>Enter your research information below.</p>
             </div>
+
             <div className="search-icon">⌕</div>
           </div>
 
           <form onSubmit={handleSearch}>
+
+            {/* Research Title */}
             <div className="form-group">
               <label htmlFor="title">
                 Thesis / Research Title
@@ -162,6 +200,7 @@ function App() {
               </small>
             </div>
 
+            {/* Website URL */}
             <div className="form-group">
               <label htmlFor="website">
                 Website URL
@@ -182,49 +221,66 @@ function App() {
               </small>
             </div>
 
+            {/* Publication Year Range */}
             <div className="form-group">
-              <label>Publication Year Range</label>
+              <label>
+                Publication Year Range
+              </label>
 
               <div className="year-inputs">
+
                 <div>
                   <span>From</span>
+
                   <input
                     type="number"
                     value={startYear}
-                    onChange={(e) => setStartYear(e.target.value)}
+                    onChange={(e) =>
+                      setStartYear(e.target.value)
+                    }
                     min="1900"
                     max="2100"
                     required
                   />
                 </div>
 
-                <div className="year-separator">—</div>
+                <div className="year-separator">
+                  —
+                </div>
 
                 <div>
                   <span>To</span>
+
                   <input
                     type="number"
                     value={endYear}
-                    onChange={(e) => setEndYear(e.target.value)}
+                    onChange={(e) =>
+                      setEndYear(e.target.value)
+                    }
                     min="1900"
                     max="2100"
                     required
                   />
                 </div>
+
               </div>
             </div>
 
+            {/* Error Message */}
             {error && (
               <div className="error-message">
                 {error}
               </div>
             )}
 
+            {/* Form Buttons */}
             <div className="form-actions">
+
               <button
                 type="button"
                 className="clear-button"
                 onClick={handleClear}
+                disabled={loading}
               >
                 Clear
               </button>
@@ -234,17 +290,26 @@ function App() {
                 className="search-button"
                 disabled={loading}
               >
-                {loading ? "Searching..." : "⌕  Find Related Literature"}
+                {loading
+                  ? "Searching..."
+                  : "⌕ Find Related Literature"}
               </button>
+
             </div>
+
           </form>
         </section>
 
+        {/* Search Results */}
         {searched && (
+
           <section className="results-section">
+
             <div className="results-heading">
+
               <div>
                 <h2>Search Results</h2>
+
                 <p>
                   Research publications within your selected
                   year range.
@@ -254,58 +319,106 @@ function App() {
               <span className="result-count">
                 {results.length} results
               </span>
+
             </div>
 
+            {/* Display Results */}
             {results.length > 0 ? (
+
               <div className="results-list">
-                {results.map((item) => (
-                  <article className="result-card" key={item.id}>
+
+                {results.map((item, index) => (
+
+                  <article
+                    className="result-card"
+                    key={item.doi || item.id || index}
+                  >
+
+                    {/* Publication Information */}
                     <div className="result-top">
+
                       <span className="result-year">
-                        {item.year}
+                        {item.year || "Year unavailable"}
                       </span>
+
                       <span className="result-source">
-                        {item.source}
+                        {item.journal || "Unknown Journal"}
                       </span>
+
                     </div>
 
-                    <h3>{item.title}</h3>
+                    {/* Research Title */}
+                    <h3>
+                      {item.title || "Untitled Research"}
+                    </h3>
 
+                    {/* Authors */}
                     <p className="authors">
-                      {item.authors}
+                      {Array.isArray(item.authors)
+                        ? item.authors.join(", ")
+                        : item.authors || "Authors not available"}
                     </p>
 
+                    {/* Abstract */}
                     <p className="abstract">
-                      {item.abstract}
+                      {item.abstract ||
+                        "No abstract available for this publication."}
                     </p>
 
-                    <a
-                      href={item.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="source-link"
-                    >
-                      View Original Source ↗
-                    </a>
+                    {/* DOI */}
+                    {item.doi && (
+                      <p className="authors">
+                        DOI: {item.doi}
+                      </p>
+                    )}
+
+                    {/* Original Research Link */}
+                    {item.url && (
+
+                      <a
+                        href={item.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="source-link"
+                      >
+                        View Original Source ↗
+                      </a>
+
+                    )}
+
                   </article>
+
                 ))}
+
               </div>
+
             ) : (
+
+              /* No Results */
               <div className="empty-results">
+
                 <h3>No results found</h3>
+
                 <p>
-                  Try changing your publication year range.
+                  Try changing your research title or publication
+                  year range.
                 </p>
+
               </div>
+
             )}
+
           </section>
+
         )}
 
+        {/* Footer */}
         <footer className="footer">
           <p>
             RRL Finder © 2026 | Academic Research Assistance Tool
           </p>
         </footer>
+
       </main>
     </div>
   );
